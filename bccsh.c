@@ -6,6 +6,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/shm.h>
+#include <sys/wait.h>
 #include <signal.h>
 #include <readline/readline.h>
 #include <readline/history.h>
@@ -17,6 +18,7 @@ int main(int argc, char **argv)
 {
    char temp[100];
    char prompt[4200];
+   pid_t childpid;
    using_history();
    int running = 1;
    while (running)
@@ -65,10 +67,23 @@ int main(int argc, char **argv)
       {
          running = 0;
       }
-      else
+      else// if (strcmp(argv[0], "./ep1") == 0)
       {
-         //TODO: fork
-         printf("comando salvo\n");
+         //TODO: fork do ep1
+         //argv[1]: nome do arquivo .txt
+         if((childpid = fork()) == 0)
+         {
+            //filho
+            printf("vou executar %s com argumento %s\n", argv[0], argv[1]);
+            execve(argv[0],&argv[0],0);
+         }
+         else
+         {
+            //pai
+            printf("childpid == %d\n", childpid);
+            waitpid(-1, NULL, 0);
+         }
+         
       }
    }
    clear_history();
