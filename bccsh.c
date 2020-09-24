@@ -74,7 +74,6 @@ int main(int argc, char **argv)
          if((childpid = fork()) == 0)
          {
             //filho
-            printf("vou executar %s com argumento %s\n", argv[0], argv[1]);
             execve(argv[0],&argv[0],0);
          }
          else
