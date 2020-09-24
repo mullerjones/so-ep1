@@ -4,45 +4,78 @@
 #include <string.h>
 #include <errno.h>
 #include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/shm.h>
+#include <signal.h>
 #include <readline/readline.h>
 #include <readline/history.h>
 
-void print_prompt();
-void read_command(char *argv[], char *temp);
+void get_prompt(char *prompt);
+void read_command(char *argv[], char *prompt, char* temp);
 
 int main(int argc, char **argv)
 {
    char temp[100];
+   char prompt[4200];
    using_history();
-   HISTORY_STATE *state;
    int running = 1;
    while (running)
    {
-      read_command(argv, temp);
-      state = history_get_history_state();
+      get_prompt(prompt);
+      read_command(argv, prompt, temp);
       if (strcmp(argv[0], "mkdir") == 0)
       {
-         //mkdir
-         //argv[1] -> directory to create
+         char *dir_name = argv[1];
+
+         if (mkdir(dir_name, S_IFDIR | S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH) == 0)
+         {
+            printf("directory %s created\n", dir_name);
+         }
       }
       else if (strcmp(argv[0], "kill") == 0)
       {
-         //kill
-         //argv[1] -> -9
-         //argv[2] -> PID
+         pid_t target_pid;
+
+         if (strcmp(argv[1], "-9") == 0)
+         {
+            target_pid = atoi(argv[2]);
+
+            if (kill(target_pid, SIGKILL) == 0)
+            {
+               printf("process %d killed\n", target_pid);
+            }
+         }
       }
       else if (strcmp(argv[0], "ln") == 0)
       {
-         //ln
-         //argv[1] -> -s
-         //argv[2] -> arquivo
-         //argv[3] -> link
+         char *target, *link_path;
+
+         if (strcmp(argv[1], "-s") == 0)
+         {
+            target = argv[2];
+            link_path = argv[3];
+
+            if (symlink(target, link_path) == 0)
+            {
+               printf("symlink created\n");
+            }
+         }
+      }
+      else if (strcmp(argv[0], "exit") == 0)
+      {
+         running = 0;
+      }
+      else
+      {
+         //TODO: fork
+         printf("comando salvo\n");
       }
    }
+   clear_history();
    exit(0);
 }
 
-void print_prompt()
+void get_prompt(char *prompt)
 {
    char user[32];   //max username length in linux
    char path[4096]; //max path length in linux
@@ -50,13 +83,13 @@ void print_prompt()
       printf("couldn't retrieve username\n");
    if (getcwd(path, 4096) == NULL)
       printf("couldn't get path\n");
-   printf("{%s@%s} ", user, path);
+   sprintf(prompt, "{%s@%s} ", user, path);
 }
 
-void read_command(char *argv[], char *temp)
+void read_command(char *argv[], char *prompt, char* temp)
 {
    int n = 0;
-   temp = readline("");
+   temp = readline(prompt);
    add_history(temp);
    argv[n++] = strtok(temp, " ");
    while (argv[n - 1] != NULL)
