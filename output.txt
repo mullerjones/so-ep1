@@ -1,0 +1,2 @@
+o processo 'proc1' terminou
+o processo 'proc2' terminou
