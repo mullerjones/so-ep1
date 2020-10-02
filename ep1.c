@@ -34,7 +34,7 @@ void printProcessData(FILE *file, ProcessData *data) {
 
 // Reads trace file, returns linked list with process data
 Process* get_processes(FILE *trace) {
-    char line[100];
+    char line[MAX_LINE_LENGTH];
     Process *process_list, *new_node, *last_node;
     ProcessData *new_data;
 
@@ -45,7 +45,7 @@ Process* get_processes(FILE *trace) {
     last_node = process_list;
 
     // read line from file, add data to the end of the list
-    while (fgets(line, 100, trace) != NULL) {
+    while (fgets(line, MAX_LINE_LENGTH, trace) != NULL) {
         new_data = (ProcessData *) malloc(sizeof(ProcessData));
 
         sscanf(line,
