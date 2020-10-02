@@ -68,8 +68,19 @@ Process* get_processes(FILE *trace) {
 
 void* work(void* data) {
     ProcessData *pd = (ProcessData*) data;
+    struct timespec t0, t; 
+    long x = 1;
 
-    sleep(pd->dt);
+    clock_gettime(CLOCK_MONOTONIC, &t0);
+    clock_gettime(CLOCK_MONOTONIC, &t);
+
+//    sleep(pd->dt);
+    while (pd->dt >= (t.tv_sec - t0.tv_sec)) {
+        for (int i = 0; i < 1000; i++) {
+            x = (x * x) % 1000000000;
+        }
+        clock_gettime(CLOCK_MONOTONIC, &t);
+    }
 
     return NULL;
 }
