@@ -146,7 +146,7 @@ void fcfs_scheduler(Process *process_list, FILE *output_file)
         total_tn = t.tv_nsec - initial_t.tv_nsec;
 
         // add processes to queue of ready processes
-        while (current && compareTimes(current->data->t0, t, initial_t) == -1)
+        while (current && compareTimes(current->data->t0, t, initial_t) != 1)
         {
             if (debug)
             {
