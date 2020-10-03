@@ -1,3 +1,5 @@
+#define _GNU_SOURCE // this is needed for pthread_tryjoin_np to work
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -20,6 +22,7 @@ typedef struct {
 typedef struct proc_node {
     ProcessData *data;
     pthread_t thread;
+    struct timespec t0;
     struct proc_node *next;
 } Process;
 
@@ -75,7 +78,7 @@ void* work(void* data) {
     clock_gettime(CLOCK_MONOTONIC, &t);
 
 //    sleep(pd->dt);
-    while (pd->dt >= (t.tv_sec - t0.tv_sec)) {
+    while (pd->dt > (t.tv_sec - t0.tv_sec)) {
         for (int i = 0; i < 1000; i++) {
             x = (x * x) % 1000000000;
         }
@@ -85,48 +88,88 @@ void* work(void* data) {
     return NULL;
 }
 
+/*
+ * TODO: Os processos ainda estão executando em paralelo. Precisamos
+ *       adicionar mecanismo de controle de execução das threads
+ * */
 void fcfs_scheduler(Process *process_list, FILE *output_file) {
     /*
-     * inicial_t: time at beginning of simulation (t == 0);
+     * initial_t: time at beginning of simulation (t == 0);
      * t: current time
-     * t0: time current process started, relative to beginning of simulation
      */
-    struct timespec inicial_t, t, t0;
-    int tf, tr;
+    struct timespec initial_t, t, sleep_t, rem;
+    int tf, tr, total_t;
 
-    Process *current = process_list->next;
+    Process *current = process_list->next, *previous;
+    Process *ready_list = malloc(sizeof(Process)), *last_ready;
+    ready_list->data = NULL;
+    ready_list->next = NULL;
+    last_ready = ready_list;
 
-    clock_gettime(CLOCK_REALTIME, &inicial_t);
+    sleep_t.tv_sec  = 0;
+    sleep_t.tv_nsec = 1000000000; // 1.0 seconds
 
-    while (current) {
-        if (debug) {
-            fprintf(stderr, "new process arrived: ");
-            printProcessData(stderr, current->data);
-            fprintf(stderr, "\n");
+    clock_gettime(CLOCK_MONOTONIC, &initial_t);
+    clock_gettime(CLOCK_MONOTONIC, &t);
+
+    while (current || ready_list->next) {
+        total_t = t.tv_sec - initial_t.tv_sec;
+
+        // add processes to queue of ready processes
+        while (current && current->data->t0 <= total_t) {
+            if (debug) {
+                fprintf(stderr, "new process arrived: ");
+                printProcessData(stderr, current->data);
+                fprintf(stderr, "\n");
+            }
+
+            process_list->next = current->next;
+            current->next = NULL;
+
+            last_ready->next = current;
+            last_ready = current;
+
+            current = process_list->next;
         }
 
-        pthread_create(&(current->thread), NULL, work, current->data);
-        clock_gettime(CLOCK_REALTIME, &t0);
-
-        if (pthread_join(current->thread, NULL)) {
-            fprintf(stderr, "failed to join thread %s\n", current->data->name);
-        }
-        clock_gettime(CLOCK_REALTIME, &t);
-
-        tf = t.tv_sec - inicial_t.tv_sec;
-        tr = t.tv_sec - t0.tv_sec;
-
-        if (debug) {
-            fprintf(stderr, "process ended: ");
-            fprintf(stderr, "%s %d %d\n", current->data->name, tf, tr);
+        // start all ready processes and store the time
+        current = ready_list->next;
+        while (current) {
+            if (current->t0.tv_sec == 0) {
+                pthread_create(&(current->thread), NULL, work, current->data);
+                clock_gettime(CLOCK_MONOTONIC, &(current->t0));
+            }
+            current = current->next;
         }
 
-        fprintf(output_file, "%s %d %d\n", current->data->name, tf, tr);
+        nanosleep(&sleep_t, &rem);
 
-        process_list->next = current->next;
-        free(current->data);
-        free(current);
+        // remove finished processes from ready list and write output to file
+        previous = ready_list;
+        current = ready_list->next;
+        while (current) {
+            if (pthread_tryjoin_np(current->thread, NULL) == 0) {
+                clock_gettime(CLOCK_MONOTONIC, &t);
+                tr = t.tv_sec - current->t0.tv_sec;
+                tf = t.tv_sec - initial_t.tv_sec;
+
+                if (debug) {
+                    fprintf(stderr, "process ended: ");
+                    fprintf(stderr, "%s %d %d\n", current->data->name, tf, tr);
+                }
+
+                fprintf(output_file, "%s %d %d\n", current->data->name, tf, tr);
+
+                previous->next = current->next;
+                free(current->data);
+                free(current);
+                current = previous;
+            }
+            current = current->next;
+        }
+
         current = process_list->next;
+        clock_gettime(CLOCK_MONOTONIC, &t);
     }
 
     free(process_list);
@@ -139,7 +182,8 @@ int main(int argc, char **argv) {
     Process *process_list;
 
     if (argc < 4) {
-        printf("Usage: %s <scheduler_id> <trace_file> <output_file>\n", argv[0]);
+        printf("Usage: %s <scheduler_id> <trace_file> <output_file>\n",
+               argv[0]);
         return -1;
     }
 
