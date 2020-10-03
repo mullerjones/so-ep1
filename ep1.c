@@ -9,6 +9,7 @@
 #define MAX_LINE_LENGTH 100
 
 static int debug = 0;
+pthread_mutex_t lock;
 
 // Struct to store data about the simulated processes
 typedef struct {
@@ -73,6 +74,7 @@ void* work(void* data) {
     ProcessData *pd = (ProcessData*) data;
     struct timespec t0, t; 
     long x = 1;
+    pthread_mutex_lock(&lock);
 
     clock_gettime(CLOCK_MONOTONIC, &t0);
     clock_gettime(CLOCK_MONOTONIC, &t);
@@ -84,6 +86,7 @@ void* work(void* data) {
         }
         clock_gettime(CLOCK_MONOTONIC, &t);
     }
+    pthread_mutex_unlock(&lock);
 
     return NULL;
 }
@@ -204,6 +207,17 @@ int main(int argc, char **argv) {
     output_file = argv[3];
 
     output = fopen(output_file, "w");
+
+    if (pthread_mutex_init(&lock, NULL) != 0)
+    {
+        printf("\n mutex init failed\n");
+        return 1;
+    }
+    else
+    {
+        printf("mutex init successful\n");
+    }
+    
 
     switch (scheduler) {
         case 1:
