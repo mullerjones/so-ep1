@@ -13,7 +13,8 @@ static int debug = 0;
 pthread_mutex_t lock;
 
 // Struct to store data about the simulated processes
-typedef struct {
+typedef struct
+{
     char name[31];
     int t0;
     int dt;
@@ -21,14 +22,16 @@ typedef struct {
 } ProcessData;
 
 // Linked list of 'Process' data
-typedef struct proc_node {
+typedef struct proc_node
+{
     ProcessData *data;
     pthread_t thread;
     struct timespec t0;
     struct proc_node *next;
 } Process;
 
-void printProcessData(FILE *file, ProcessData *data) {
+void printProcessData(FILE *file, ProcessData *data)
+{
     fprintf(file,
             "%s %d %d %d",
             data->name,
@@ -38,7 +41,8 @@ void printProcessData(FILE *file, ProcessData *data) {
 }
 
 // Reads trace file, returns linked list with process data
-Process* get_processes(FILE *trace) {
+Process *get_processes(FILE *trace)
+{
     char line[MAX_LINE_LENGTH];
     Process *process_list, *new_node, *last_node;
     ProcessData *new_data;
@@ -50,19 +54,19 @@ Process* get_processes(FILE *trace) {
     last_node = process_list;
 
     // read line from file, add data to the end of the list
-    while (fgets(line, MAX_LINE_LENGTH, trace) != NULL) {
-        new_data = (ProcessData *) malloc(sizeof(ProcessData));
+    while (fgets(line, MAX_LINE_LENGTH, trace) != NULL)
+    {
+        new_data = (ProcessData *)malloc(sizeof(ProcessData));
 
         sscanf(line,
                "%s %d %d %d ",
                new_data->name,
                &(new_data->t0),
                &(new_data->dt),
-               &(new_data->deadline)
-               );
+               &(new_data->deadline));
 
         new_node = malloc(sizeof(Process));
-        new_node->data =  new_data;
+        new_node->data = new_data;
         new_node->next = NULL;
         last_node->next = new_node;
         last_node = new_node;
@@ -71,18 +75,21 @@ Process* get_processes(FILE *trace) {
     return process_list;
 }
 
-void* work(void* data) {
-    ProcessData *pd = (ProcessData*) data;
-    struct timespec t0, t; 
+void *work(void *data)
+{
+    ProcessData *pd = (ProcessData *)data;
+    struct timespec t0, t;
     long x = 1;
     pthread_mutex_lock(&lock);
 
     clock_gettime(CLOCK_MONOTONIC, &t0);
     clock_gettime(CLOCK_MONOTONIC, &t);
 
-//    sleep(pd->dt);
-    while (pd->dt > (t.tv_sec - t0.tv_sec)) {
-        for (int i = 0; i < 1000; i++) {
+    //    sleep(pd->dt);
+    while (compareTimes(pd->dt,t, t0) == 1)
+    {
+        for (int i = 0; i < 1000; i++)
+        {
             x = (x * x) % 1000000000;
         }
         clock_gettime(CLOCK_MONOTONIC, &t);
@@ -92,11 +99,28 @@ void* work(void* data) {
     return NULL;
 }
 
+int compareTimes(int value, struct timespec t, struct timespec init)
+{
+    int milisecs = (t.tv_nsec - init.tv_nsec) / 1000000;
+    milisecs += (t.tv_sec - init.tv_sec) * 1000;
+    if(value < milisecs) return -1;
+    else if (value > milisecs) return 1;
+    else return 0;
+}
+
+int calcTime(struct timespec t, struct timespec t0)
+{
+    int milisecs = (t.tv_nsec - t0.tv_nsec) / 1000000;
+    milisecs += (t.tv_sec - t0.tv_sec) * 1000;
+    return milisecs;
+}
+
 /*
  * TODO: Os processos ainda estão executando em paralelo. Precisamos
  *       adicionar mecanismo de controle de execução das threads
  * */
-void fcfs_scheduler(Process *process_list, FILE *output_file) {
+void fcfs_scheduler(Process *process_list, FILE *output_file)
+{
     /*
      * initial_t: time at beginning of simulation (t == 0);
      * t: current time
@@ -110,19 +134,22 @@ void fcfs_scheduler(Process *process_list, FILE *output_file) {
     ready_list->next = NULL;
     last_ready = ready_list;
 
-    sleep_t.tv_sec  = 0;
+    sleep_t.tv_sec = 0;
     sleep_t.tv_nsec = SECOND; // 1.0 seconds
 
     clock_gettime(CLOCK_MONOTONIC, &initial_t);
     clock_gettime(CLOCK_MONOTONIC, &t);
 
-    while (current || ready_list->next) {
+    while (current || ready_list->next)
+    {
         total_t = t.tv_sec - initial_t.tv_sec;
         total_tn = t.tv_nsec - initial_t.tv_nsec;
 
         // add processes to queue of ready processes
-        while (current && current->data->t0 <= total_t) {
-            if (debug) {
+        while (current && compareTimes(current->data->t0, t, initial_t) == -1)
+        {
+            if (debug)
+            {
                 fprintf(stderr, "new process arrived: ");
                 printProcessData(stderr, current->data);
                 fprintf(stderr, "\n");
@@ -139,8 +166,10 @@ void fcfs_scheduler(Process *process_list, FILE *output_file) {
 
         // start all ready processes and store the time
         current = ready_list->next;
-        while (current) {
-            if (current->t0.tv_sec == 0) {
+        while (current)
+        {
+            if (current->t0.tv_sec == 0)
+            {
                 pthread_create(&(current->thread), NULL, work, current->data);
                 clock_gettime(CLOCK_MONOTONIC, &(current->t0));
             }
@@ -152,13 +181,18 @@ void fcfs_scheduler(Process *process_list, FILE *output_file) {
         // remove finished processes from ready list and write output to file
         previous = ready_list;
         current = ready_list->next;
-        while (current) {
-            if (pthread_tryjoin_np(current->thread, NULL) == 0) {
+        while (current)
+        {
+            if (pthread_tryjoin_np(current->thread, NULL) == 0)
+            {
                 clock_gettime(CLOCK_MONOTONIC, &t);
-                tr = t.tv_sec - current->t0.tv_sec;
-                tf = t.tv_sec - initial_t.tv_sec;
+                tr = calcTime(t, current->t0);
+                //tr = t.tv_sec - current->t0.tv_sec;
+                tf = calcTime(t, initial_t);
+                //tf = t.tv_sec - initial_t.tv_sec;
 
-                if (debug) {
+                if (debug)
+                {
                     fprintf(stderr, "process ended: ");
                     fprintf(stderr, "%s %d %d\n", current->data->name, tf, tr);
                 }
@@ -180,7 +214,8 @@ void fcfs_scheduler(Process *process_list, FILE *output_file) {
     free(process_list);
 }
 
-void srtn_scheduler(Process *process_list, FILE *output_file) {
+void srtn_scheduler(Process *process_list, FILE *output_file)
+{
     /*
      * initial_t: time at beginning of simulation (t == 0);
      * t: current time
@@ -194,18 +229,21 @@ void srtn_scheduler(Process *process_list, FILE *output_file) {
     ready_list->next = NULL;
     last_ready = ready_list;
 
-    sleep_t.tv_sec  = 0;
+    sleep_t.tv_sec = 0;
     sleep_t.tv_nsec = SECOND; // 1.0 seconds
 
     clock_gettime(CLOCK_MONOTONIC, &initial_t);
     clock_gettime(CLOCK_MONOTONIC, &t);
 
-    while (current || ready_list->next) {
+    while (current || ready_list->next)
+    {
         total_t = t.tv_sec - initial_t.tv_sec;
 
         // add processes to queue of ready processes
-        while (current && current->data->t0 <= total_t) {
-            if (debug) {
+        while (current && current->data->t0 <= total_t)
+        {
+            if (debug)
+            {
                 fprintf(stderr, "new process arrived: ");
                 printProcessData(stderr, current->data);
                 fprintf(stderr, "\n");
@@ -222,8 +260,10 @@ void srtn_scheduler(Process *process_list, FILE *output_file) {
 
         // start all ready processes and store the time
         current = ready_list->next;
-        while (current) {
-            if (current->t0.tv_sec == 0) {
+        while (current)
+        {
+            if (current->t0.tv_sec == 0)
+            {
                 pthread_create(&(current->thread), NULL, work, current->data);
                 clock_gettime(CLOCK_MONOTONIC, &(current->t0));
             }
@@ -235,13 +275,16 @@ void srtn_scheduler(Process *process_list, FILE *output_file) {
         // remove finished processes from ready list and write output to file
         previous = ready_list;
         current = ready_list->next;
-        while (current) {
-            if (pthread_tryjoin_np(current->thread, NULL) == 0) {
+        while (current)
+        {
+            if (pthread_tryjoin_np(current->thread, NULL) == 0)
+            {
                 clock_gettime(CLOCK_MONOTONIC, &t);
                 tr = t.tv_sec - current->t0.tv_sec;
                 tf = t.tv_sec - initial_t.tv_sec;
 
-                if (debug) {
+                if (debug)
+                {
                     fprintf(stderr, "process ended: ");
                     fprintf(stderr, "%s %d %d\n", current->data->name, tf, tr);
                 }
@@ -263,26 +306,30 @@ void srtn_scheduler(Process *process_list, FILE *output_file) {
     free(process_list);
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
     int scheduler;
     FILE *trace, *output;
     char *output_file;
     Process *process_list;
 
-    if (argc < 4) {
+    if (argc < 4)
+    {
         printf("Usage: %s <scheduler_id> <trace_file> <output_file>\n",
                argv[0]);
         return -1;
     }
 
-    if (argc == 5 && argv[4][0] == 'd') {
+    if (argc == 5 && argv[4][0] == 'd')
+    {
         debug = 1;
         printf("debug mode active\n");
     }
 
     scheduler = atoi(argv[1]);
 
-    if ((trace = fopen(argv[2], "r")) == 0) {
+    if ((trace = fopen(argv[2], "r")) == 0)
+    {
         printf("error: failed to open trace file.\nExiting ...\n");
         return -1;
     }
@@ -302,19 +349,19 @@ int main(int argc, char **argv) {
     {
         printf("mutex init successful\n");
     }
-    
 
-    switch (scheduler) {
-        case 1:
-            fcfs_scheduler(process_list, output);
-            break;
+    switch (scheduler)
+    {
+    case 1:
+        fcfs_scheduler(process_list, output);
+        break;
 
-        case 2:
-            srtn_scheduler(process_list, output);
-            break;
+    case 2:
+        srtn_scheduler(process_list, output);
+        break;
 
-        default:
-            fprintf(stderr, "error: invalid scheduler value\n");
+    default:
+        fprintf(stderr, "error: invalid scheduler value\n");
     }
     process_list = NULL;
 
