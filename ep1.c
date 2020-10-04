@@ -11,6 +11,7 @@
 
 static int debug = 0;
 pthread_mutex_t lock;
+int contextChanges = 0;
 
 // Struct to store data about the simulated processes
 typedef struct {
@@ -92,6 +93,12 @@ void* work(void* data) {
     return NULL;
 }
 
+void mudouContexto()
+{
+    contextChanges++;
+    fprintf(stderr, "Mudou de contexto, total = %d\n", contextChanges);
+}
+
 /*
  * TODO: Os processos ainda estão executando em paralelo. Precisamos
  *       adicionar mecanismo de controle de execução das threads
@@ -155,6 +162,9 @@ void fcfs_scheduler(Process *process_list, FILE *output_file) {
         while (current) {
             if (pthread_tryjoin_np(current->thread, NULL) == 0) {
                 clock_gettime(CLOCK_MONOTONIC, &t);
+
+                if(ready_list->next != NULL) mudouContexto();
+
                 tr = t.tv_sec - current->t0.tv_sec;
                 tf = t.tv_sec - initial_t.tv_sec;
 
@@ -317,6 +327,12 @@ int main(int argc, char **argv) {
             fprintf(stderr, "error: invalid scheduler value\n");
     }
     process_list = NULL;
+
+    if(debug)
+    {
+        printf("Numero de mudancas de contexto = %d\n", contextChanges);
+        fprintf(output_file, "Numero de mudancas de contexto = %d\n", contextChanges);
+    }
 
     fclose(output);
 
