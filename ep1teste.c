@@ -11,6 +11,7 @@
 
 static int debug = 0;
 pthread_mutex_t lock;
+int contextChanges = 0;
 
 // Struct to store data about the simulated processes
 typedef struct
@@ -86,7 +87,7 @@ void *work(void *data)
     clock_gettime(CLOCK_MONOTONIC, &t);
 
     //    sleep(pd->dt);
-    while (compareTimes(pd->dt,t, t0) == 1)
+    while (compareTimes(pd->dt, t, t0) == 1)
     {
         for (int i = 0; i < 1000; i++)
         {
@@ -103,9 +104,12 @@ int compareTimes(int value, struct timespec t, struct timespec init)
 {
     int milisecs = (t.tv_nsec - init.tv_nsec) / 1000000;
     milisecs += (t.tv_sec - init.tv_sec) * 1000;
-    if(value < milisecs) return -1;
-    else if (value > milisecs) return 1;
-    else return 0;
+    if (value < milisecs)
+        return -1;
+    else if (value > milisecs)
+        return 1;
+    else
+        return 0;
 }
 
 int calcTime(struct timespec t, struct timespec t0)
@@ -113,6 +117,12 @@ int calcTime(struct timespec t, struct timespec t0)
     int milisecs = (t.tv_nsec - t0.tv_nsec) / 1000000;
     milisecs += (t.tv_sec - t0.tv_sec) * 1000;
     return milisecs;
+}
+
+void mudouContexto()
+{
+    contextChanges++;
+    fprintf(stderr, "Mudou de contexto, total = %d\n", contextChanges);
 }
 
 /*
@@ -202,6 +212,7 @@ void fcfs_scheduler(Process *process_list, FILE *output_file)
                 previous->next = current->next;
                 free(current->data);
                 free(current);
+                if(ready_list->next != NULL) mudouContexto();
                 current = previous;
             }
             current = current->next;
@@ -364,6 +375,12 @@ int main(int argc, char **argv)
         fprintf(stderr, "error: invalid scheduler value\n");
     }
     process_list = NULL;
+
+    if (debug)
+    {
+        printf("Numero de mudancas de contexto = %d\n", contextChanges);
+        fprintf(output, "Numero de mudancas de contexto = %d\n", contextChanges);
+    }
 
     fclose(output);
 

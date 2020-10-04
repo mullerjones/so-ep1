@@ -163,7 +163,7 @@ void fcfs_scheduler(Process *process_list, FILE *output_file) {
             if (pthread_tryjoin_np(current->thread, NULL) == 0) {
                 clock_gettime(CLOCK_MONOTONIC, &t);
 
-                if(ready_list->next != NULL) mudouContexto();
+                
 
                 tr = t.tv_sec - current->t0.tv_sec;
                 tf = t.tv_sec - initial_t.tv_sec;
@@ -178,6 +178,7 @@ void fcfs_scheduler(Process *process_list, FILE *output_file) {
                 previous->next = current->next;
                 free(current->data);
                 free(current);
+                if(ready_list->next != NULL) mudouContexto();
                 current = previous;
             }
             current = current->next;
@@ -331,7 +332,7 @@ int main(int argc, char **argv) {
     if(debug)
     {
         printf("Numero de mudancas de contexto = %d\n", contextChanges);
-        fprintf(output_file, "Numero de mudancas de contexto = %d\n", contextChanges);
+        fprintf(output, "Numero de mudancas de contexto = %d\n", contextChanges);
     }
 
     fclose(output);
