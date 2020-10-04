@@ -81,6 +81,11 @@ void* work(void* data) {
     clock_gettime(CLOCK_MONOTONIC, &t0);
     clock_gettime(CLOCK_MONOTONIC, &t);
 
+    int cpu = sched_getcpu();
+    if(debug)
+    {
+        fprintf(stderr, "Processo %s comecou a usar a CPU %d\n", pd->name, cpu);
+    }
 //    sleep(pd->dt);
     while (pd->dt > (t.tv_sec - t0.tv_sec)) {
         for (int i = 0; i < 1000; i++) {
@@ -88,6 +93,12 @@ void* work(void* data) {
         }
         clock_gettime(CLOCK_MONOTONIC, &t);
     }
+
+    if(debug)
+    {
+        fprintf(stderr, "Processo %s esta liberando a CPU %d\n", pd->name, cpu);
+    }
+
     pthread_mutex_unlock(&lock);
 
     return NULL;
